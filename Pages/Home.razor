@@ -1,0 +1,121 @@
+﻿@page "/"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+
+<PageTitle>Demon Slayer - Personagens</PageTitle>
+
+<h1>Personagens de Demon Slayer</h1>
+
+<div class="mb-3 d-flex gap-2" style="max-width: 400px;">
+    <input type="text" class="form-control" @bind="termoBusca" @bind:event="oninput" placeholder="Buscar por nome..." />
+</div>
+
+@if (carregando)
+{
+    <p><em>A carregar personagens...</em></p>
+}
+
+@if (erro != null)
+{
+    <p class="text-danger">@erro</p>
+}
+
+@if (!carregando && erro == null && personagensFiltrados.Any())
+{
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        @foreach (var p in personagensFiltrados)
+        {
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    @if (!string.IsNullOrEmpty(p.Img))
+                    {
+                        <img src="@p.Img" class="card-img-top" alt="@p.Name" style="height: 280px; object-fit: cover;" />
+                    }
+                    <div class="card-body">
+                        <h5 class="card-title fw-bold">@p.Name</h5>
+                        <p class="card-text mb-1"><strong>Idade:</strong> @(p.AgeElement.ValueKind == JsonValueKind.Undefined || p.AgeElement.ValueKind == JsonValueKind.Null ? "Desconhecida" : p.AgeElement.ToString())</p>
+                        <p class="card-text mb-1"><strong>Raça:</strong> @(string.IsNullOrEmpty(p.Race) ? "Desconhecida" : p.Race)</p>
+                        @if (!string.IsNullOrEmpty(p.Quote))
+                        {
+                            <blockquote class="blockquote-footer mt-2 mb-0">
+                                <small><em>"@p.Quote"</em></small>
+                            </blockquote>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (!carregando && erro == null && !personagensFiltrados.Any())
+{
+    <p>Nenhum personagem encontrado.</p>
+}
+
+@code {
+    private List<DemonSlayerCharacter> todosPersonagens = new();
+    private string termoBusca = string.Empty;
+    private bool carregando = true;
+    private string? erro;
+
+    private IEnumerable<DemonSlayerCharacter> personagensFiltrados =>
+        string.IsNullOrWhiteSpace(termoBusca)
+            ? todosPersonagens
+            : todosPersonagens.Where(p => p.Name != null && p.Name.Contains(termoBusca, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string url = "https://www.demonslayer-api.com/api/v1/characters?page=1";
+            var response = await Http.GetFromJsonAsync<ApiResponse>(url);
+
+            if (response?.Content != null)
+            {
+                todosPersonagens = response.Content;
+            }
+            else if (response?.Data != null)
+            {
+                todosPersonagens = response.Data;
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = $"Erro ao carregar os dados da API: {ex.Message}";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    public class ApiResponse
+    {
+        [JsonPropertyName("content")]
+        public List<DemonSlayerCharacter>? Content { get; set; }
+
+        [JsonPropertyName("data")]
+        public List<DemonSlayerCharacter>? Data { get; set; }
+    }
+
+    public class DemonSlayerCharacter
+    {
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        // Usa JsonElement para aceitar tanto inteiros como strings no campo age da API
+        [JsonPropertyName("age")]
+        public JsonElement AgeElement { get; set; }
+
+        [JsonPropertyName("race")]
+        public string? Race { get; set; }
+
+        [JsonPropertyName("quote")]
+        public string? Quote { get; set; }
+
+        [JsonPropertyName("img")]
+        public string? Img { get; set; }
+    }
+}
